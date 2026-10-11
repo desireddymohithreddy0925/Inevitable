@@ -4,7 +4,7 @@ from typing import List, Optional
 class Settings(BaseSettings):
     backend_host: str = "127.0.0.1"
     backend_port: int = 8000
-    backend_cors_origins: List[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    backend_cors_origins: List[str] = ["*"]
 
     gemma_provider: str = "mock"
     together_api_key: Optional[str] = None

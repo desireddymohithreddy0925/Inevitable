@@ -31,6 +31,13 @@ export default function Console() {
     errors?: string[];
   } | null>(null);
 
+  const getApiUrl = () => {
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      return '';
+    }
+    return import.meta.env.VITE_API_URL || 'https://inevitable-uu2o.onrender.com';
+  };
+
   useEffect(() => {
     // Load executions
     const savedExecs = localStorage.getItem('inevitable_executions');
@@ -47,7 +54,7 @@ export default function Console() {
       try { setValidationStatus(JSON.parse(savedVal)); } catch (e) {}
     }
     // Fetch server config
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://inevitable-uu2o.onrender.com';
+    const apiUrl = getApiUrl();
     fetch(`${apiUrl}/api/v1/config`)
       .then(res => res.json())
       .then(data => setServerConfig(data))
@@ -74,7 +81,7 @@ export default function Console() {
     }
 
     setIsValidating(true);
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://inevitable-uu2o.onrender.com';
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/v1/keys/validate`, {
@@ -128,7 +135,7 @@ export default function Console() {
     setError('');
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://inevitable-uu2o.onrender.com';
+      const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/api/v1/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

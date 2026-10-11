@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://inevitable-uu2o.onrender.com/api/:path*"
+    }
+  ]
+}
