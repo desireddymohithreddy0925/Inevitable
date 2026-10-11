@@ -29,57 +29,6 @@ Inevitable is designed as a zero-trust, decoupled verification system that separ
 
 ### System Architecture Diagram
 
-```mermaid
-flowchart TD
-    subgraph Client["Frontend Client (Vercel / React 19 + TypeScript)"]
-        UI["Investigation Console & Dashboard"]
-        SSE_Recv["SSE Stream Consumer & Real-Time Lifecycle"]
-    end
-
-    subgraph Gateway["API & Security Boundary (FastAPI / Render)"]
-        API_Route["POST /api/v1/verify"]
-        SSRF_Check["SSRF & URI Validator (Loopback/Private IP Filter)"]
-        Env_Scrub["Credential Stripper (Isolated Subprocess Env)"]
-    end
-
-    subgraph Inspection["Repository Inspector"]
-        Git_Clone["Disposable Worktree Clone (GitPython)"]
-        Evidence_Ext["AST & Source Evidence Extractor"]
-    end
-
-    subgraph Intelligence["Intelligence Layer (Google Gemma 4)"]
-        LLM["Gemma 4 Reasoning Engine (Together / HF)"]
-        Schema_Val["Pydantic Strict Output Validation"]
-        Artifacts["Reproduction Test + Candidate Unified Diff"]
-    end
-
-    subgraph Sandbox["Hermetic Execution Sandbox (Pytest Subprocess)"]
-        Baseline["1. Baseline Run (Expected Exit Code != 0)"]
-        Git_Apply["2. Patch Application (Path Traversal Check)"]
-        Patched["3. Patched Run (Expected Exit Code == 0)"]
-    end
-
-    subgraph StateMachine["Deterministic State Machine"]
-        Verifier{"State Machine Verification"}
-        PCP["Proof-Carrying Patch (Cryptographic Proof)"]
-    end
-
-    UI -->|"Submit URI & Defect Description"| API_Route
-    API_Route --> SSRF_Check
-    SSRF_Check --> Env_Scrub
-    Env_Scrub --> Git_Clone
-    Git_Clone --> Evidence_Ext
-    Evidence_Ext -->|"Source Snippets & Context"| LLM
-    LLM --> Schema_Val
-    Schema_Val --> Artifacts
-    Artifacts -->|"Execute Reproduction Test"| Baseline
-    Baseline -->|"Baseline Fails (Defect Confirmed)"| Git_Apply
-    Git_Apply -->|"Apply Candidate Patch"| Patched
-    Patched --> Verifier
-    Verifier -->|"Baseline Failed & Patched Passed"| PCP
-    PCP -->|"Stream SSE Lifecycle Events"| SSE_Recv
-    SSE_Recv -->|"Real-Time Verification Render"| UI
-```
 
 ### Backend (Python)
 - **FastAPI**: Asynchronous, high-performance API routing with Server-Sent Events.
