@@ -47,7 +47,7 @@ export default function Console() {
       try { setValidationStatus(JSON.parse(savedVal)); } catch (e) {}
     }
     // Fetch server config
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://inevitable-uu2o.onrender.com';
     fetch(`${apiUrl}/api/v1/config`)
       .then(res => res.json())
       .then(data => setServerConfig(data))
@@ -74,7 +74,7 @@ export default function Console() {
     }
 
     setIsValidating(true);
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://inevitable-uu2o.onrender.com';
 
     try {
       const res = await fetch(`${apiUrl}/api/v1/keys/validate`, {
@@ -128,7 +128,7 @@ export default function Console() {
     setError('');
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://inevitable-uu2o.onrender.com';
       const response = await fetch(`${apiUrl}/api/v1/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
