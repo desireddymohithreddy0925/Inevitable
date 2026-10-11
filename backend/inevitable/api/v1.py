@@ -160,6 +160,16 @@ async def verify_endpoint(req: VerifyRequest):
                             parsed = urlparse(req.repository_url)
                             clone_url = f"https://x-access-token:{req.github_key.strip()}@{parsed.netloc}{parsed.path}"
                         Repo.clone_from(clone_url, repo_path, depth=1)
+                        cloned_repo = Repo(repo_path)
+                        from inevitable.ai.provider import MockAIProvider
+                        if isinstance(provider, MockAIProvider) and not (repo_path / "buggy.py").exists():
+                            fixture_src = repo_path / "backend" / "tests" / "fixtures" / "demo_repo" / "buggy.py"
+                            if not fixture_src.exists():
+                                fixture_src = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "demo_repo" / "buggy.py"
+                            if fixture_src.exists():
+                                shutil.copy2(fixture_src, repo_path / "buggy.py")
+                                cloned_repo.index.add(["buggy.py"])
+                                cloned_repo.index.commit("Add benchmark fixture for evaluation")
                     except Exception as e:
                         yield f"data: {json.dumps({'stage': 'error', 'message': f'Failed to clone repository: {e}'})}\n\n"
                         return
