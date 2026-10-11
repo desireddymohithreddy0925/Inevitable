@@ -22,6 +22,14 @@ export default function Console() {
   const [githubKey, setGithubKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [showGithubKey, setShowGithubKey] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationStatus, setValidationStatus] = useState<{
+    hf_valid?: boolean;
+    hf_user?: string | null;
+    github_valid?: boolean;
+    github_user?: string | null;
+    errors?: string[];
+  } | null>(null);
 
   useEffect(() => {
     // Load executions
@@ -34,6 +42,10 @@ export default function Console() {
     if (savedKey) setApiKey(savedKey);
     const savedGhKey = localStorage.getItem('inevitable_github_key');
     if (savedGhKey) setGithubKey(savedGhKey);
+    const savedVal = localStorage.getItem('inevitable_validation');
+    if (savedVal) {
+      try { setValidationStatus(JSON.parse(savedVal)); } catch (e) {}
+    }
     // Fetch server config
     const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
     fetch(`${apiUrl}/api/v1/config`)
@@ -42,32 +54,70 @@ export default function Console() {
       .catch(err => console.error("Could not load config", err));
   }, []);
 
-  const saveApiKey = () => {
+  const saveApiKey = async () => {
     const trimmedApi = apiKey.trim();
     const trimmedGh = githubKey.trim();
 
     if (trimmedApi && !trimmedApi.startsWith('hf_')) {
-      alert('Invalid Hugging Face token. It should start with "hf_".');
+      alert('Invalid Hugging Face token. It must start with "hf_".');
       return;
     }
     
     if (trimmedGh && !(trimmedGh.startsWith('ghp_') || trimmedGh.startsWith('github_pat_'))) {
-      alert('Invalid GitHub token. It should start with "ghp_" or "github_pat_".');
+      alert('Invalid GitHub token. It must start with "ghp_" or "github_pat_".');
       return;
     }
 
-    setApiKey(trimmedApi);
-    setGithubKey(trimmedGh);
-    localStorage.setItem('inevitable_api_key', trimmedApi);
-    localStorage.setItem('inevitable_github_key', trimmedGh);
-    alert('API Keys saved securely to encrypted local browser storage.');
+    if (!trimmedApi && !trimmedGh) {
+      clearApiKeys();
+      return;
+    }
+
+    setIsValidating(true);
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/keys/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: trimmedApi || undefined,
+          github_key: trimmedGh || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      setValidationStatus(data);
+      localStorage.setItem('inevitable_validation', JSON.stringify(data));
+
+      if (data.errors && data.errors.length > 0) {
+        alert('Validation Failed:\n' + data.errors.join('\n'));
+        return;
+      }
+
+      setApiKey(trimmedApi);
+      setGithubKey(trimmedGh);
+      localStorage.setItem('inevitable_api_key', trimmedApi);
+      localStorage.setItem('inevitable_github_key', trimmedGh);
+
+      let msg = 'Credentials verified and active!';
+      if (data.hf_valid) msg += `\n• Hugging Face connected: ${data.hf_user}`;
+      if (data.github_valid) msg += `\n• GitHub connected: @${data.github_user}`;
+      alert(msg);
+    } catch (e: any) {
+      alert('Connection to backend validation service failed: ' + e.message);
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   const clearApiKeys = () => {
     localStorage.removeItem('inevitable_api_key');
     localStorage.removeItem('inevitable_github_key');
+    localStorage.removeItem('inevitable_validation');
     setApiKey('');
     setGithubKey('');
+    setValidationStatus(null);
     alert('All stored credentials have been securely purged from browser storage.');
   };
 
@@ -82,7 +132,12 @@ export default function Console() {
       const response = await fetch(`${apiUrl}/api/v1/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repository_url: url, bug_description: bug }),
+        body: JSON.stringify({
+          repository_url: url,
+          bug_description: bug,
+          api_key: apiKey.trim() || undefined,
+          github_key: githubKey.trim() || undefined,
+        }),
       });
 
       if (!response.body) throw new Error('No response body received from server.');
@@ -277,14 +332,18 @@ export default function Console() {
             <div className="dev-panel">
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem'}}>
                 <h2 className="dev-panel-title" style={{margin: 0}}>Hugging Face / Gemma 4 Token</h2>
-                {apiKey && (
-                  <span style={{fontSize: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.2rem 0.6rem', borderRadius: '4px'}} className="mono">
-                    SECURED (hf_••••{apiKey.slice(-4)})
+                {validationStatus?.hf_valid ? (
+                  <span style={{fontSize: '0.75rem', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '0.2rem 0.6rem', borderRadius: '4px'}} className="mono">
+                    ✓ ACTIVE: {validationStatus.hf_user}
                   </span>
-                )}
+                ) : apiKey ? (
+                  <span style={{fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', color: '#94a3b8', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '0.2rem 0.6rem', borderRadius: '4px'}} className="mono">
+                    hf_••••{apiKey.slice(-4)}
+                  </span>
+                ) : null}
               </div>
               <div className="dev-form-group">
-                <label>Hugging Face Access Token</label>
+                <label>Hugging Face Access Token (for Gemma 4 live reasoning)</label>
                 <div style={{display: 'flex', gap: '0.5rem'}}>
                   <input 
                     type={showApiKey ? "text" : "password"} 
@@ -307,14 +366,18 @@ export default function Console() {
 
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', marginTop: '1.5rem'}}>
                 <h2 className="dev-panel-title" style={{margin: 0}}>GitHub Personal Access Token</h2>
-                {githubKey && (
-                  <span style={{fontSize: '0.75rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.2rem 0.6rem', borderRadius: '4px'}} className="mono">
-                    SECURED (ghp_••••{githubKey.slice(-4)})
+                {validationStatus?.github_valid ? (
+                  <span style={{fontSize: '0.75rem', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '0.2rem 0.6rem', borderRadius: '4px'}} className="mono">
+                    ✓ ACTIVE: @{validationStatus.github_user}
                   </span>
-                )}
+                ) : githubKey ? (
+                  <span style={{fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', color: '#94a3b8', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '0.2rem 0.6rem', borderRadius: '4px'}} className="mono">
+                    ghp_••••{githubKey.slice(-4)}
+                  </span>
+                ) : null}
               </div>
               <div className="dev-form-group">
-                <label>GitHub API Key</label>
+                <label>GitHub API Key (for cloning private repositories & rate limit bypass)</label>
                 <div style={{display: 'flex', gap: '0.5rem'}}>
                   <input 
                     type={showGithubKey ? "text" : "password"} 
@@ -335,17 +398,36 @@ export default function Console() {
                 </div>
               </div>
 
+              {validationStatus?.errors && validationStatus.errors.length > 0 && (
+                <div style={{background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '0.75rem 1rem', margin: '1rem 0'}}>
+                  <div style={{fontSize: '0.8rem', color: '#ef4444', fontWeight: 600, marginBottom: '0.25rem'}}>
+                    ⚠️ Validation Issues Detected:
+                  </div>
+                  <ul style={{margin: 0, paddingLeft: '1.2rem', fontSize: '0.8rem', color: '#fca5a5'}}>
+                    {validationStatus.errors.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div style={{background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '6px', padding: '0.75rem 1rem', margin: '1.25rem 0'}}>
                 <div style={{fontSize: '0.8rem', color: '#10b981', fontWeight: 600, marginBottom: '0.25rem'}}>
                   🛡️ Zero-Leakage Guarantee
                 </div>
                 <p className="text-muted" style={{fontSize: '0.8rem', margin: 0, lineHeight: 1.5}}>
-                  Your credentials are stored exclusively inside your browser's private storage. Subprocess execution sandboxes are automatically stripped of all environment variables and secrets before running tests.
+                  Your credentials are authenticated directly with Hugging Face and GitHub APIs. Subprocess test sandboxes are strictly stripped of all credentials before execution. Only valid keys will be accepted.
                 </p>
               </div>
 
               <div style={{display: 'flex', gap: '1rem', marginTop: '1rem'}}>
-                <button className="dev-btn-primary" onClick={saveApiKey}>Save Keys</button>
+                <button 
+                  className="dev-btn-primary" 
+                  onClick={saveApiKey}
+                  disabled={isValidating}
+                >
+                  {isValidating ? "Validating Credentials..." : "Save & Verify Credentials"}
+                </button>
                 {(apiKey || githubKey) && (
                   <button 
                     className="dev-btn-outline" 

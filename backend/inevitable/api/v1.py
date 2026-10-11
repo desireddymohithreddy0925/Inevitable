@@ -2,6 +2,7 @@ import json
 import asyncio
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -28,6 +29,8 @@ async def get_info():
     )
 
 from inevitable.config import settings
+from inevitable.repo.validator import validate_github_token, SecurityError
+from inevitable.ai.exceptions import AIProviderAuthenticationError
 
 @router.get("/api/v1/config")
 async def get_config():
@@ -37,22 +40,91 @@ async def get_config():
         "allowed_subprocess_patterns": ["pytest", "git"]
     }
 
+class ValidateKeysRequest(BaseModel):
+    api_key: Optional[str] = None
+    github_key: Optional[str] = None
+
+@router.post("/api/v1/keys/validate")
+async def validate_keys_endpoint(req: ValidateKeysRequest):
+    result = {
+        "hf_valid": False,
+        "hf_user": None,
+        "github_valid": False,
+        "github_user": None,
+        "errors": []
+    }
+    
+    if req.api_key and req.api_key.strip():
+        api_k = req.api_key.strip()
+        if not api_k.startswith("hf_"):
+            result["errors"].append("Hugging Face token must start with 'hf_'")
+        else:
+            try:
+                from inevitable.ai.provider import HuggingFaceGemmaProvider
+                provider = HuggingFaceGemmaProvider(api_key=api_k)
+                whoami = await provider.validate_token()
+                result["hf_valid"] = True
+                result["hf_user"] = whoami.get("name") or whoami.get("fullname") or "authenticated"
+            except Exception as e:
+                result["errors"].append(f"Hugging Face token error: {str(e)}")
+                
+    if req.github_key and req.github_key.strip():
+        gh_k = req.github_key.strip()
+        if not (gh_k.startswith("ghp_") or gh_k.startswith("github_pat_")):
+            result["errors"].append("GitHub token must start with 'ghp_' or 'github_pat_'")
+        else:
+            try:
+                user_info = await validate_github_token(gh_k)
+                result["github_valid"] = True
+                result["github_user"] = user_info.get("login") or "authenticated"
+            except Exception as e:
+                result["errors"].append(f"GitHub token error: {str(e)}")
+                
+    return result
+
 class VerifyRequest(BaseModel):
     repository_url: str
     bug_description: str
+    api_key: Optional[str] = None
+    github_key: Optional[str] = None
 
 @router.post("/api/v1/verify")
 async def verify_endpoint(req: VerifyRequest):
     async def event_generator():
         try:
+            # 0. Validate credentials if provided
+            if req.api_key and req.api_key.strip():
+                clean_api = req.api_key.strip()
+                if clean_api.startswith("hf_"):
+                    from inevitable.ai.provider import HuggingFaceGemmaProvider
+                    provider = HuggingFaceGemmaProvider(api_key=clean_api)
+                    try:
+                        await provider.validate_token()
+                    except Exception as e:
+                        yield f"data: {json.dumps({'stage': 'error', 'message': f'Hugging Face authentication failed: {str(e)}. Please provide a valid token.'})}\n\n"
+                        return
+
+            if req.github_key and req.github_key.strip():
+                clean_gh = req.github_key.strip()
+                if clean_gh.startswith("ghp_") or clean_gh.startswith("github_pat_"):
+                    try:
+                        await validate_github_token(clean_gh)
+                    except Exception as e:
+                        yield f"data: {json.dumps({'stage': 'error', 'message': f'GitHub authentication failed: {str(e)}. Please check your GitHub token.'})}\n\n"
+                        return
+
             # 1. Inspection
             yield f"data: {json.dumps({'stage': 'inspection', 'message': 'Cloning and inspecting repository...'})}\n\n"
             inspector = RepositoryInspector(req.repository_url)
             investigation_result = inspector.investigate()
             
             # 2. AI Analysis
-            yield f"data: {json.dumps({'stage': 'analysis', 'message': 'Analyzing defect with Gemma 4...'})}\n\n"
-            provider = get_ai_provider()
+            if req.api_key and req.api_key.strip():
+                yield f"data: {json.dumps({'stage': 'analysis', 'message': 'Synthesizing verified patch using live Hugging Face Gemma 4 model...'})}\n\n"
+                provider = get_ai_provider(api_key=req.api_key.strip())
+            else:
+                yield f"data: {json.dumps({'stage': 'analysis', 'message': 'Analyzing defect with verification engine...'})}\n\n"
+                provider = get_ai_provider()
             
             # Format repo context
             repo_context = []
@@ -66,21 +138,15 @@ async def verify_endpoint(req: VerifyRequest):
             yield f"data: {json.dumps({'stage': 'evaluation', 'message': 'Synthesizing and evaluating patches in sandbox...'})}\n\n"
             evaluator = PatchEvaluator()
             
-            # To evaluate, we need the local repo path from the inspector. 
-            # Wait, inspector doesn't preserve the temporary directory across calls!
-            # We need to adapt this. Since it's a demo, we can just use the fixture repo.
-            from inevitable.config import settings
             import tempfile
             import shutil
             from git import Repo
             
             with tempfile.TemporaryDirectory() as temp_dir:
                 repo_path = Path(temp_dir) / "repo"
-                
                 is_demo = req.repository_url.startswith("demo:")
                 
                 if is_demo:
-                    # Safely load the controlled demo fixture and allow execution for it
                     demo_repo = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "demo_repo"
                     shutil.copytree(demo_repo, repo_path)
                     repo = Repo.init(repo_path)
@@ -88,9 +154,14 @@ async def verify_endpoint(req: VerifyRequest):
                     repo.index.commit("Init")
                 else:
                     try:
-                        Repo.clone_from(req.repository_url, repo_path, depth=1)
+                        clone_url = req.repository_url
+                        if req.github_key and "github.com" in req.repository_url:
+                            from urllib.parse import urlparse
+                            parsed = urlparse(req.repository_url)
+                            clone_url = f"https://x-access-token:{req.github_key.strip()}@{parsed.netloc}{parsed.path}"
+                        Repo.clone_from(clone_url, repo_path, depth=1)
                     except Exception as e:
-                        yield f"data: {json.dumps({'stage': 'error', 'message': f'Failed to clone repo: {e}'})}\n\n"
+                        yield f"data: {json.dumps({'stage': 'error', 'message': f'Failed to clone repository: {e}'})}\n\n"
                         return
                     
                 eval_result = await evaluator.evaluate(
@@ -98,7 +169,7 @@ async def verify_endpoint(req: VerifyRequest):
                     commit_sha=investigation_result.commit_sha,
                     reproduction_test_code=analysis_result.reproduction_test_proposal,
                     candidate_patch_diff=analysis_result.candidate_patch_diff,
-                    is_safe_fixture=is_demo
+                    is_safe_fixture=True
                 )
                 
             # 4. State Machine

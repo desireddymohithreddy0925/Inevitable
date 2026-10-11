@@ -42,3 +42,33 @@ def validate_repository_url(url: str) -> str:
         raise SecurityError("Blocked internal hostname.")
         
     return url
+
+async def validate_github_token(token: str) -> dict:
+    """
+    Validate GitHub Personal Access Token against GitHub API.
+    Raises SecurityError if invalid or expired.
+    """
+    if not token or not token.strip():
+        raise SecurityError("GitHub token cannot be empty.")
+        
+    import httpx
+    headers = {
+        "Authorization": f"Bearer {token.strip()}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Inevitable-Verification-Engine"
+    }
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get("https://api.github.com/user", headers=headers)
+            if resp.status_code in (401, 403):
+                raise SecurityError("Invalid GitHub token: Authentication failed.")
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as e:
+            raise SecurityError(f"GitHub API authentication error: {e.response.status_code}")
+        except SecurityError:
+            raise
+        except Exception as e:
+            raise SecurityError(f"Failed to connect to GitHub API: {str(e)}")
+
