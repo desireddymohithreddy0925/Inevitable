@@ -201,6 +201,11 @@ export default function Console() {
     }
   };
 
+  const clearExecutions = () => {
+    localStorage.removeItem('inevitable_executions');
+    setExecutions([]);
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -208,8 +213,26 @@ export default function Console() {
         const rate = executions.length > 0 ? ((verifiedCount / executions.length) * 100).toFixed(1) : '0.0';
         return (
           <div className="dev-content">
-            <h1 className="dev-page-title">Project Dashboard</h1>
-            <p className="dev-page-subtitle">Overview of your verification metrics and system health.</p>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem'}}>
+              <div>
+                <h1 className="dev-page-title" style={{marginBottom: '0.25rem'}}>Project Dashboard</h1>
+                <p className="dev-page-subtitle" style={{margin: 0}}>Overview of your verification metrics and system health.</p>
+              </div>
+              <div style={{display: 'flex', gap: '0.75rem'}}>
+                <button className="dev-btn-primary" onClick={() => setActiveTab('console')}>
+                  Run Investigation
+                </button>
+                {executions.length > 0 && (
+                  <button 
+                    className="dev-btn-outline" 
+                    style={{borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444'}} 
+                    onClick={clearExecutions}
+                  >
+                    Clear History
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="dev-grid-2">
               <div className="dev-panel">
                 <h4 className="dev-heading-small text-muted mb-4">Total Executions</h4>
@@ -244,8 +267,26 @@ export default function Console() {
       case 'recent':
         return (
           <div className="dev-content">
-            <h1 className="dev-page-title">Recent Executions</h1>
-            <p className="dev-page-subtitle">Audit log of all autonomous verifications executed locally.</p>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem'}}>
+              <div>
+                <h1 className="dev-page-title" style={{marginBottom: '0.25rem'}}>Recent Executions</h1>
+                <p className="dev-page-subtitle" style={{margin: 0}}>Audit log of all autonomous verifications executed locally.</p>
+              </div>
+              <div style={{display: 'flex', gap: '0.75rem'}}>
+                <button className="dev-btn-primary" onClick={() => setActiveTab('console')}>
+                  New Investigation
+                </button>
+                {executions.length > 0 && (
+                  <button 
+                    className="dev-btn-outline" 
+                    style={{borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444'}} 
+                    onClick={clearExecutions}
+                  >
+                    Clear Audit Log
+                  </button>
+                )}
+              </div>
+            </div>
             <div className="dev-panel">
               {executions.length === 0 ? (
                 <p className="text-muted text-center py-8">No executions found. Run an investigation first.</p>
@@ -263,9 +304,9 @@ export default function Console() {
                     {executions.map((exec) => (
                       <tr key={exec.id} style={{ borderBottom: '1px solid #222' }}>
                         <td className="mono" style={{ padding: '1rem 0', color: '#E5E5E5' }}>{exec.repository}</td>
-                        <td className="mono" style={{ padding: '1rem 0', color: '#888' }}>{exec.commit.substring(0, 8)}</td>
+                        <td className="mono" style={{ padding: '1rem 0', color: '#888' }}>{exec.commit ? exec.commit.substring(0, 8) : 'N/A'}</td>
                         <td style={{ padding: '1rem 0' }}>
-                          <span className={`dev-badge dev-badge-${exec.status.toLowerCase()}`}>{exec.status}</span>
+                          <span className={`dev-badge dev-badge-${exec.status ? exec.status.toLowerCase() : 'blocked'}`}>{exec.status}</span>
                         </td>
                         <td style={{ padding: '1rem 0', color: '#666' }}>{exec.date}</td>
                       </tr>
