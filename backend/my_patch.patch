@@ -1,0 +1,10 @@
+--- test_diff.py	2026-10-11 04:27:16
++++ test_diff_patched.py	2026-10-11 04:27:16
+@@ -1,6 +1,6 @@
+ def add_numbers(a, b):
+     # Intentional bug: subtracts instead of adding
+-    return a - b
++    return a + b
+ 
+ class Calculator:
+     def multiply(self, a, b):

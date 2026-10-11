@@ -1,0 +1,29 @@
+{
+  "name": "inevitable",
+  "version": "0.1.0",
+  "description": "Don't trust the patch. Prove it. — Proof-Carrying Patches for AI-generated code",
+  "license": "Apache-2.0",
+  "author": "Inevitable Team <noreply@anthropic.com>",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\"",
+    "build": "npm run build:backend && npm run build:web",
+    "test": "npm run test:backend && npm run test:web",
+    "lint": "npm run lint:backend && npm run lint:web",
+    "dev:backend": "cd packages/backend && npm run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "build:backend": "cd packages/backend && npm run build",
+    "build:web": "cd apps/web && npm run build"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

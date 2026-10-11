@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "inevitable-backend"
+version = "0.1.0"
+description = "Proof-Carrying Patches for AI-generated code verification"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "Inevitable Team", email = "noreply@anthropic.com"}
+]
+keywords = ["ai", "verification", "pytest", "code-analysis"]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.7.0",
+    "httpx>=0.28.0",
+    "gitpython>=3.1.0",
+    "pytest>=8.3.0",
+    "pytest-subtests",
+    "rich>=13.9.0",
+    "pyarrow-stubs",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pytest-cov>=5.0.0",
+    "pre-commit>=4.0.0",
+]
+
+[project.scripts]
+inevitable = "inevitable.app:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["inevitable"]
+
+[tool.pytest.ini_options]
+norecursedirs = ["tests/fixtures"]
